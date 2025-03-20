@@ -1815,6 +1815,12 @@ def generate_forecast(ttm_data, phase1_years, phase1_growth_rate,
 def calculate_valuation(forecast, net_cash, discount_rate, maturity_decline_rate, shares):
     """Calculate DCF valuation based on forecast"""
     try:
+        # Calcola la somma dei flussi di cassa non scontati durante il periodo di previsione
+        sum_forecast_cash_flows = 0
+        for year in forecast.index:
+            if "Net Income" in forecast.columns and year > 0:
+                sum_forecast_cash_flows += forecast.loc[year, "Net Income"]
+        
         # Calculate NPV of forecast period
         NPV_forecast = 0
         for year in forecast.index:
@@ -1826,6 +1832,9 @@ def calculate_valuation(forecast, net_cash, discount_rate, maturity_decline_rate
             terminal_value = 0
         else:
             terminal_value = (forecast.loc[forecast.index[-1], "Net Income"] * (1 - maturity_decline_rate)) / (discount_rate + maturity_decline_rate)
+        
+        # Calculate Total Enterprise Value (non-discounted) - somma dei flussi previsionali + valore terminale
+        total_value_nondiscounted = sum_forecast_cash_flows + terminal_value
         
         # Calculate NPV of terminal value
         if forecast.empty:
@@ -1848,6 +1857,8 @@ def calculate_valuation(forecast, net_cash, discount_rate, maturity_decline_rate
             theoretical_share_value = final_net_value / shares
         
         return {
+            "sum_forecast_cash_flows": sum_forecast_cash_flows,
+            "total_value_nondiscounted": total_value_nondiscounted,
             "NPV_forecast": NPV_forecast,
             "terminal_value": terminal_value,
             "NPV_perpetuo": NPV_perpetuo,
@@ -1859,6 +1870,8 @@ def calculate_valuation(forecast, net_cash, discount_rate, maturity_decline_rate
         st.error(f"Errore durante il calcolo della valutazione: {e}")
         st.exception(e)  # Show full stack trace
         return {
+            "sum_forecast_cash_flows": 0,
+            "total_value_nondiscounted": 0,
             "NPV_forecast": 0,
             "terminal_value": 0,
             "NPV_perpetuo": 0,
@@ -2257,10 +2270,12 @@ elif st.session_state.step == 'show_results':
     
     valuation = st.session_state.valuation_results
     
+    # Rearranged to include Terminal Value (non-discounted)
     col1, col2, col3 = st.columns(3)
     
     with col1:
         st.metric("NPV Forecast", f"${valuation['NPV_forecast']/1e9:.2f}B")
+        st.metric("Terminal Value (non-discounted)", f"${valuation['terminal_value']/1e9:.2f}B")
         st.metric("NPV Terminal Value", f"${valuation['NPV_perpetuo']/1e9:.2f}B")
     
     with col2:
